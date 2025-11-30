@@ -11,8 +11,8 @@ interface AuthContextType {
   isLoading: boolean;
   apiStatus: string;
   testApiConnection: () => Promise<boolean>;
-  registrationSuccess: boolean; // Добавляем новое состояние
-  resetRegistrationSuccess: () => void; // Метод для сброса состояния
+  registrationSuccess: boolean;
+  resetRegistrationSuccess: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>("checking");
-  const [registrationSuccess, setRegistrationSuccess] = useState(false); // Новое состояние
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
   const testApiConnection = async (): Promise<boolean> => {
     try {
@@ -40,7 +40,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Метод для сброса состояния успешной регистрации
   const resetRegistrationSuccess = () => {
     setRegistrationSuccess(false);
   };
@@ -55,25 +54,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Только если API доступен, восстанавливаем пользователя
         if (connectionSuccess) {
-          const token = localStorage.getItem("auth_token");
-          const userData = localStorage.getItem("user_data");
+          // ИСПРАВЛЕНИЕ: проверяем, есть ли уже сессия в sessionStorage
+          const hasExistingSession = sessionStorage.getItem("auth_initialized");
 
-          console.log("Данные из localStorage:");
-          console.log("Token:", token);
-          console.log("UserData:", userData);
-
-          if (token && userData) {
-            try {
-              const parsedUser = JSON.parse(userData);
-              console.log("Пользователь восстановлен:", parsedUser);
-              setUser(parsedUser);
-            } catch (parseError) {
-              console.error("Ошибка парсинга user_data:", parseError);
-              localStorage.removeItem("auth_token");
-              localStorage.removeItem("user_data");
-            }
+          if (!hasExistingSession) {
+            // Это новая сессия - очищаем старые данные и устанавливаем флаг
+            console.log("Новая сессия - очищаем данные авторизации");
+            sessionStorage.removeItem("auth_token");
+            sessionStorage.removeItem("user_data");
+            sessionStorage.setItem("auth_initialized", "true");
           } else {
-            console.log("Нет сохраненных данных пользователя");
+            // Это существующая сессия - восстанавливаем пользователя
+            const token = sessionStorage.getItem("auth_token");
+            const userData = sessionStorage.getItem("user_data");
+
+            console.log("Данные из sessionStorage:");
+            console.log("Token:", token);
+            console.log("UserData:", userData);
+
+            if (token && userData) {
+              try {
+                const parsedUser = JSON.parse(userData);
+                console.log("Пользователь восстановлен:", parsedUser);
+                setUser(parsedUser);
+              } catch (parseError) {
+                console.error("Ошибка парсинга user_data:", parseError);
+                sessionStorage.removeItem("auth_token");
+                sessionStorage.removeItem("user_data");
+              }
+            } else {
+              console.log("Нет сохраненных данных пользователя");
+            }
           }
         }
       } catch (error) {
@@ -107,10 +118,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setUser(response.user);
 
-      localStorage.setItem("auth_token", response.token);
-      localStorage.setItem("user_data", JSON.stringify(response.user));
+      // Сохраняем в sessionStorage
+      sessionStorage.setItem("auth_token", response.token);
+      sessionStorage.setItem("user_data", JSON.stringify(response.user));
+      // Устанавливаем флаг, что сессия инициализирована
+      sessionStorage.setItem("auth_initialized", "true");
 
-      console.log("Данные сохранены в localStorage");
+      console.log("Данные сохранены в sessionStorage");
       console.log("Текущий пользователь в состоянии:", response.user);
     } catch (error) {
       console.error("Ошибка входа:", error);
@@ -141,16 +155,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.log("Успешная регистрация:", response.user);
 
-      // ВАЖНОЕ ИЗМЕНЕНИЕ: Не устанавливаем пользователя и не сохраняем в localStorage
-      // Вместо этого устанавливаем флаг успешной регистрации
+      // ВАЖНО: Не устанавливаем пользователя и не сохраняем токен
+      // Пользователь должен войти после регистрации
       setRegistrationSuccess(true);
 
       console.log("Регистрация успешна, пользователь должен войти");
-
-      // НЕ делаем этого:
-      // setUser(response.user);
-      // localStorage.setItem("auth_token", response.token);
-      // localStorage.setItem("user_data", JSON.stringify(response.user));
     } catch (error) {
       console.error("Ошибка регистрации:", error);
       throw error;
@@ -162,9 +171,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logout = () => {
     console.log("Выход из системы");
     setUser(null);
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user_data");
-    console.log("Данные удалены из localStorage");
+    setRegistrationSuccess(false);
+
+    // Очищаем sessionStorage
+    sessionStorage.removeItem("auth_token");
+    sessionStorage.removeItem("user_data");
+    sessionStorage.removeItem("auth_initialized");
+
+    console.log("Данные удалены из sessionStorage");
   };
 
   const value: AuthContextType = {
@@ -175,8 +189,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     apiStatus,
     testApiConnection,
-    registrationSuccess, // Добавляем в контекст
-    resetRegistrationSuccess, // Добавляем в контекст
+    registrationSuccess,
+    resetRegistrationSuccess,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

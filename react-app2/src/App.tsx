@@ -7,6 +7,8 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ChatProvider } from "./context/ChatContext";
+import { UserProvider } from "./context/UserContext"; // Импортируем новый провайдер
 import { AuthForm } from "./components/AuthForm";
 import { Dashboard } from "./components/Dashboard";
 
@@ -25,26 +27,32 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <PublicRoute>
-                <AuthForm />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Router>
+      <UserProvider>
+        {" "}
+        {/* Добавляем UserProvider */}
+        <ChatProvider>
+          <Router>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <PublicRoute>
+                    <AuthForm />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </ChatProvider>
+      </UserProvider>
     </AuthProvider>
   );
 }

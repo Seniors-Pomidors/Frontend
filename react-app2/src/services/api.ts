@@ -1,8 +1,19 @@
 // src/services/api.ts
 import { LoginData, RegisterData, AuthResponse } from '../types/auth';
+import { Chat, Message, CreateChatData, SendMessageData } from '../types/chat';
+import { UserSearchResult } from '../types/user';
 
-const API_BASE_URL = 'https://prodpal-backend.onrender.com';//http://25.33.4.91:8000
-//https://prodpal-backend.onrender.com/docs#/
+const API_BASE_URL = 'https://prodpal-backend.onrender.com';
+
+// Функция для получения заголовков с авторизацией
+const getAuthHeaders = () => {
+  // Используем sessionStorage вместо localStorage
+  const token = sessionStorage.getItem('auth_token');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : '',
+  };
+};
 
 export const authAPI = {
   async login(loginData: LoginData): Promise<AuthResponse> {
@@ -283,7 +294,7 @@ export const authAPI = {
       console.log("Проверка соединения с бэкендом...");
       
       // Пробуем несколько эндпоинтов
-      const endpoints = ['/docs#', '/auth/login', '/', '/api/health'];
+      const endpoints = ['/docs', '/auth/login', '/', '/api/health'];
       
       for (const endpoint of endpoints) {
         try {
@@ -323,3 +334,412 @@ export const authAPI = {
   }
 };
 
+// API для работы с чатами
+export const chatAPI = {
+  // Получить все чаты пользователя
+  async getChats(): Promise<Chat[]> {
+    console.log("Получение списка чатов...");
+    
+    const url = `${API_BASE_URL}/api/chats/`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения чатов:");
+      console.log("   Status:", response.status);
+      console.log("   OK:", response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения чатов:", response.status, errorText);
+        throw new Error(`Get chats failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Получены чаты:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.getChats:", error);
+      throw error;
+    }
+  },
+
+  // Создать новый чат
+  async createChat(chatData: CreateChatData): Promise<Chat> {
+    console.log("Создание нового чата...");
+    
+    const url = `${API_BASE_URL}/api/chats/`;
+    console.log("URL:", url);
+    
+    // Добавляем поле type со значением по умолчанию
+    const requestData = {
+      ...chatData,
+      type: chatData.type || "group" // Значение по умолчанию
+    };
+    
+    console.log("Данные чата:", requestData);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(requestData),
+      });
+
+      console.log("Ответ от сервера для создания чата:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка создания чата:", response.status, errorText);
+        throw new Error(`Create chat failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Чат создан:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.createChat:", error);
+      throw error;
+    }
+  },
+
+  // Получить конкретный чат
+  async getChat(chatId: number): Promise<Chat> {
+    console.log(`Получение чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения чата:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения чата:", response.status, errorText);
+        throw new Error(`Get chat failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Получен чат:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.getChat:", error);
+      throw error;
+    }
+  },
+
+  // Получить сообщения чата
+  async getMessages(chatId: number): Promise<Message[]> {
+    console.log(`Получение сообщений для чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/messages`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения сообщений:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения сообщений:", response.status, errorText);
+        throw new Error(`Get messages failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Получены сообщения:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.getMessages:", error);
+      throw error;
+    }
+  },
+
+  // Отправить сообщение
+  async sendMessage(chatId: number, messageData: SendMessageData): Promise<Message> {
+    console.log(`Отправка сообщения в чат ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/messages`;
+    console.log("URL:", url);
+    
+    // Добавляем chat_id в данные сообщения
+    const requestData = {
+      ...messageData,
+      chat_id: chatId
+    };
+    
+    console.log("Данные сообщения:", requestData);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(requestData),
+      });
+
+      console.log("Ответ от сервера для отправки сообщения:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка отправки сообщения:", response.status, errorText);
+        throw new Error(`Send message failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Сообщение отправлено:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.sendMessage:", error);
+      throw error;
+    }
+  },
+
+  // Удалить сообщение
+  async deleteMessage(chatId: number, messageId: number): Promise<void> {
+    console.log(`Удаление сообщения ${messageId} из чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/messages/${messageId}`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для удаления сообщения:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка удаления сообщения:", response.status, errorText);
+        throw new Error(`Delete message failed: ${response.status} - ${errorText}`);
+      }
+
+      console.log("Сообщение удалено");
+    } catch (error) {
+      console.error("Ошибка в chatAPI.deleteMessage:", error);
+      throw error;
+    }
+  },
+
+  // Получить участников чата
+  async getChatParticipants(chatId: number): Promise<any[]> {
+    console.log(`Получение участников чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/participants`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения участников:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения участников:", response.status, errorText);
+        throw new Error(`Get participants failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Получены участники:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.getChatParticipants:", error);
+      throw error;
+    }
+  },
+
+  // Добавить участника в чат
+  async addParticipant(chatId: number, userId: number): Promise<void> {
+    console.log(`Добавление участника ${userId} в чат ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/participants`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+      console.log("Ответ от сервера для добавления участника:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка добавления участника:", response.status, errorText);
+        throw new Error(`Add participant failed: ${response.status} - ${errorText}`);
+      }
+
+      console.log("Участник добавлен");
+    } catch (error) {
+      console.error("Ошибка в chatAPI.addParticipant:", error);
+      throw error;
+    }
+  },
+
+  // Получить конкретное сообщение
+  async getMessage(chatId: number, messageId: number): Promise<Message> {
+    console.log(`Получение сообщения ${messageId} из чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/messages/${messageId}`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения сообщения:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения сообщения:", response.status, errorText);
+        throw new Error(`Get message failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Получено сообщение:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в chatAPI.getMessage:", error);
+      throw error;
+    }
+  }
+};
+
+// API для работы с пользователями
+export const userAPI = {
+  // Поиск пользователей
+  async searchUsers(query: string): Promise<UserSearchResult[]> {
+    console.log(`Поиск пользователей по запросу: ${query}`);
+    
+    const url = `${API_BASE_URL}/api/users/search?q=${encodeURIComponent(query)}`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для поиска пользователей:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка поиска пользователей:", response.status, errorText);
+        // Если эндпоинт не существует, возвращаем пустой массив
+        if (response.status === 404) {
+          console.log("Эндпоинт поиска не найден, возвращаем пустой массив");
+          return [];
+        }
+        throw new Error(`Search users failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Найдены пользователи:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в userAPI.searchUsers:", error);
+      // Если ошибка, возвращаем пустой массив вместо выброса исключения
+      return [];
+    }
+  },
+
+  // Получить всех пользователей (альтернатива, если поиск не работает)
+  async getAllUsers(): Promise<UserSearchResult[]> {
+    console.log("Получение всех пользователей...");
+    
+    const url = `${API_BASE_URL}/api/users`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения пользователей:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения пользователей:", response.status, errorText);
+        return [];
+      }
+
+      const data = await response.json();
+      console.log("Получены пользователи:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в userAPI.getAllUsers:", error);
+      return [];
+    }
+  },
+
+  // Получить пользователя по ID
+  async getUserById(userId: number): Promise<UserSearchResult | null> {
+    console.log(`Получение пользователя с ID: ${userId}`);
+    
+    const url = `${API_BASE_URL}/api/users/${userId}`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      console.log("Ответ от сервера для получения пользователя:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка получения пользователя:", response.status, errorText);
+        return null;
+      }
+
+      const data = await response.json();
+      console.log("Получен пользователь:", data);
+      
+      return data;
+    } catch (error) {
+      console.error("Ошибка в userAPI.getUserById:", error);
+      return null;
+    }
+  }
+};
