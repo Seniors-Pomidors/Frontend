@@ -16,6 +16,8 @@ interface ChatContextType {
   createChat: (chatData: CreateChatData) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   deleteMessage: (messageId: number) => Promise<void>;
+  deleteChat: (chatId: number) => Promise<void>;
+  addParticipantsToChat: (chatId: number, usernames: string[]) => Promise<void>;
   clearError: () => void;
 }
 
@@ -171,15 +173,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       console.log("Создание нового чата...");
 
-      // Убедимся, что текущий пользователь добавлен в участники
-      const participantIds = [...chatData.participant_ids];
-      if (!participantIds.includes(user.id)) {
-        participantIds.push(user.id);
-      }
-
+      // ⚠️ НЕ добавляем текущего пользователя - сервер сделает это автоматически
       const chatDataWithCreator = {
         ...chatData,
-        participant_ids: participantIds,
+        // Используем исходный список участников
+        participant_usernames: chatData.participant_usernames,
       };
 
       console.log("Данные для создания чата:", chatDataWithCreator);
@@ -278,6 +276,65 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const deleteChat = async (chatId: number) => {
+    if (!user) return;
+
+    setIsLoading(true);
+    try {
+      console.log("Удаление чата...");
+      await chatAPI.deleteChat(chatId);
+
+      // Удаляем чат из списка
+      setChats((prev) => prev.filter((chat) => chat.id !== chatId));
+
+      // Если удаляемый чат активен, очищаем текущий чат
+      if (currentChat?.id === chatId) {
+        setCurrentChat(null);
+        setMessages([]);
+      }
+
+      console.log("Чат удален из состояния");
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ошибка удаления чата";
+      setError(errorMessage);
+      console.error("Ошибка удаления чата:", err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addParticipantsToChat = async (chatId: number, usernames: string[]) => {
+    if (!user || usernames.length === 0) return;
+
+    try {
+      console.log(`Добавление участников в чат ${chatId}:`, usernames);
+      await chatAPI.addParticipantsByUsernames(chatId, usernames);
+
+      // Обновляем информацию о чате
+      const updatedChat = await chatAPI.getChat(chatId);
+
+      // Обновляем чат в списке
+      setChats((prev) =>
+        prev.map((chat) => (chat.id === chatId ? updatedChat : chat))
+      );
+
+      // Если текущий чат активен, обновляем его
+      if (currentChat?.id === chatId) {
+        setCurrentChat(updatedChat);
+      }
+
+      console.log("Участники добавлены");
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ошибка добавления участников";
+      setError(errorMessage);
+      console.error("Ошибка добавления участников:", err);
+      throw err;
+    }
+  };
+
   // Загружаем чаты при монтировании компонента и при изменении пользователя
   useEffect(() => {
     if (user) {
@@ -302,6 +359,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     createChat,
     sendMessage,
     deleteMessage,
+    deleteChat,
+    addParticipantsToChat,
     clearError,
   };
 

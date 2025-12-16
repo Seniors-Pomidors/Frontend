@@ -29,11 +29,12 @@ export interface CreateChatData {
   name: string;
   description?: string;
   is_private: boolean;
-  participant_ids: number[];
+  participant_ids: number[]; // Для внутреннего использования
+  participant_usernames: string[]; // Для отправки на сервер
   type: string;
 }
 
 export interface SendMessageData {
   content: string;
-  chat_id: number; // Добавляем обязательное поле
+  chat_id: number;
 }

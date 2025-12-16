@@ -9,6 +9,17 @@ const API_BASE_URL = 'https://prodpal-backend.onrender.com';
 const getAuthHeaders = () => {
   // Используем sessionStorage вместо localStorage
   const token = sessionStorage.getItem('auth_token');
+  
+  // ДИАГНОСТИКА
+  console.log("🔐 getAuthHeaders вызван:");
+  console.log("   Токен из sessionStorage:", token ? `есть (${token.length} символов)` : 'НЕТ!');
+  console.log("   Все ключи в sessionStorage:");
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    const value = sessionStorage.getItem(key || '');
+    console.log(`     ${key}: ${value?.substring(0, 30)}...`);
+  }
+  
   return {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : '',
@@ -173,6 +184,19 @@ export const authAPI = {
 
       console.log("Финальный пользователь:", finalUser);
       console.log("Токен получен:", tokenData ? 'да' : 'нет');
+      console.log("Токен (первые 30 символов):", tokenData.substring(0, 30) + '...');
+
+      // ⚠️ ВАЖНОЕ ИСПРАВЛЕНИЕ: Сохраняем токен в sessionStorage
+      console.log("💾 Сохраняю токен в sessionStorage...");
+      sessionStorage.setItem('auth_token', tokenData);
+      
+      // Проверяем сохранение
+      const savedToken = sessionStorage.getItem('auth_token');
+      console.log("✅ Проверка сохранения токена:", savedToken ? 'успешно' : 'не удалось');
+      if (savedToken) {
+        console.log("✅ Длина сохраненного токена:", savedToken.length);
+        console.log("✅ Совпадают токены?", savedToken === tokenData ? 'да' : 'нет');
+      }
 
       return {
         user: finalUser,
@@ -278,6 +302,13 @@ export const authAPI = {
       console.log("Финальный пользователь (регистрация):", finalUser);
       console.log("Токен получен:", tokenData ? 'да' : 'нет');
 
+      // ⚠️ ВАЖНОЕ ИСПРАВЛЕНИЕ: Сохраняем токен при регистрации тоже
+      if (tokenData) {
+        console.log("💾 Сохраняю токен регистрации в sessionStorage...");
+        sessionStorage.setItem('auth_token', tokenData);
+        console.log("✅ Токен сохранен при регистрации");
+      }
+
       return {
         user: finalUser,
         token: tokenData
@@ -371,41 +402,81 @@ export const chatAPI = {
 
   // Создать новый чат
   async createChat(chatData: CreateChatData): Promise<Chat> {
-    console.log("Создание нового чата...");
+    console.log("🚨 === НАЧАЛО СОЗДАНИЯ ЧАТА ===");
     
     const url = `${API_BASE_URL}/api/chats/`;
-    console.log("URL:", url);
+    console.log("🌐 URL:", url);
     
-    // Добавляем поле type со значением по умолчанию
+    // Получаем заголовки и логируем их
+    const headers = getAuthHeaders();
+    console.log("📨 Заголовки запроса:");
+    console.log("   Content-Type:", headers['Content-Type']);
+    console.log("   Authorization:", headers['Authorization'] ? 'есть' : 'НЕТ!');
+    if (headers['Authorization']) {
+      console.log("   Authorization (первые 50 символов):", headers['Authorization'].substring(0, 50) + '...');
+    }
+    
+    // ⚠️ АВТОМАТИЧЕСКИ ОПРЕДЕЛЯЕМ ТИП ЧАТА
+    const isPrivateChat = chatData.participant_usernames?.length === 1;
+    
     const requestData = {
-      ...chatData,
-      type: chatData.type || "group" // Значение по умолчанию
+      name: chatData.name,
+      description: chatData.description || "",
+      is_private: chatData.is_private,
+      type: isPrivateChat ? "private" : (chatData.type || "group"),
+      participant_usernames: chatData.participant_usernames || []
     };
     
-    console.log("Данные чата:", requestData);
+    console.log("📦 Данные чата:");
+    console.log(JSON.stringify(requestData, null, 2));
     
     try {
+      console.log("🔄 Отправка запроса...");
+      
       const response = await fetch(url, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: headers,
         body: JSON.stringify(requestData),
       });
 
-      console.log("Ответ от сервера для создания чата:");
+      console.log("📥 Ответ получен:");
       console.log("   Status:", response.status);
-
+      console.log("   Status Text:", response.statusText);
+      
+      const responseText = await response.text();
+      console.log("   Тело ответа:", responseText);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Ошибка создания чата:", response.status, errorText);
-        throw new Error(`Create chat failed: ${response.status} - ${errorText}`);
+        console.error("❌ Ошибка создания чата:", response.status, responseText);
+        
+        // Если это 401, покажем больше информации
+        if (response.status === 401) {
+          console.error("❌ КРИТИЧЕСКАЯ ОШИБКА 401:");
+          const token = sessionStorage.getItem('auth_token');
+          console.error("   Токен в sessionStorage:", token ? `есть (${token.length} символов)` : 'НЕТ!');
+          console.error("   Заголовок Authorization был:", headers['Authorization']);
+          
+          // Сделаем тестовый GET запрос
+          console.log("🔄 Делаю тестовый GET запрос...");
+          try {
+            const testResponse = await fetch(`${API_BASE_URL}/api/chats/`, {
+              method: 'GET',
+              headers: headers,
+            });
+            console.log("   Тестовый GET статус:", testResponse.status);
+          } catch (testError) {
+            console.error("   Тестовый GET не удался:", testError);
+          }
+        }
+        
+        throw new Error(`Create chat failed: ${response.status} - ${responseText}`);
       }
 
-      const data = await response.json();
-      console.log("Чат создан:", data);
-      
+      const data = JSON.parse(responseText);
+      console.log("✅ Чат создан успешно!");
       return data;
     } catch (error) {
-      console.error("Ошибка в chatAPI.createChat:", error);
+      console.error("❌ Ошибка в chatAPI.createChat:", error);
       throw error;
     }
   },
@@ -438,6 +509,43 @@ export const chatAPI = {
       return data;
     } catch (error) {
       console.error("Ошибка в chatAPI.getChat:", error);
+      throw error;
+    }
+  },
+
+  // Удалить чат
+  async deleteChat(chatId: number): Promise<void> {
+    console.log(`Удаление чата ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}`;
+    console.log("URL:", url);
+    console.log("Заголовки:", getAuthHeaders());
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        // ⚠️ Добавляем тело запроса с указанием действия
+        body: JSON.stringify({
+          action: "delete" // или "remove", зависит от бэкенда
+        }),
+      });
+
+      console.log("Ответ от сервера для удаления чата:");
+      console.log("   Status:", response.status);
+      console.log("   Status Text:", response.statusText);
+
+      const responseText = await response.text();
+      console.log("Сырой ответ:", responseText);
+
+      if (!response.ok) {
+        console.error("Ошибка удаления чата:", response.status, responseText);
+        throw new Error(`Delete chat failed: ${response.status} - ${responseText}`);
+      }
+
+      console.log("Чат удален");
+    } catch (error) {
+      console.error("Ошибка в chatAPI.deleteChat:", error);
       throw error;
     }
   },
@@ -576,9 +684,9 @@ export const chatAPI = {
     }
   },
 
-  // Добавить участника в чат
-  async addParticipant(chatId: number, userId: number): Promise<void> {
-    console.log(`Добавление участника ${userId} в чат ${chatId}...`);
+  // Добавить участника в чат по username
+  async addParticipantByUsername(chatId: number, username: string): Promise<void> {
+    console.log(`Добавление участника ${username} в чат ${chatId}...`);
     
     const url = `${API_BASE_URL}/api/chats/${chatId}/participants`;
     console.log("URL:", url);
@@ -587,7 +695,7 @@ export const chatAPI = {
       const response = await fetch(url, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ participant_usernames: [username] }),
       });
 
       console.log("Ответ от сервера для добавления участника:");
@@ -601,7 +709,37 @@ export const chatAPI = {
 
       console.log("Участник добавлен");
     } catch (error) {
-      console.error("Ошибка в chatAPI.addParticipant:", error);
+      console.error("Ошибка в chatAPI.addParticipantByUsername:", error);
+      throw error;
+    }
+  },
+
+  // Добавить нескольких участников в чат по usernames
+  async addParticipantsByUsernames(chatId: number, usernames: string[]): Promise<void> {
+    console.log(`Добавление участников ${usernames} в чат ${chatId}...`);
+    
+    const url = `${API_BASE_URL}/api/chats/${chatId}/participants`;
+    console.log("URL:", url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ participant_usernames: usernames }),
+      });
+
+      console.log("Ответ от сервера для добавления участников:");
+      console.log("   Status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Ошибка добавления участников:", response.status, errorText);
+        throw new Error(`Add participants failed: ${response.status} - ${errorText}`);
+      }
+
+      console.log("Участники добавлены");
+    } catch (error) {
+      console.error("Ошибка в chatAPI.addParticipantsByUsernames:", error);
       throw error;
     }
   },

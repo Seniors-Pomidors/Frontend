@@ -1,80 +1,70 @@
 // src/components/AddParticipantsModal.tsx
-import React, { useState, useEffect } from "react";
-import { UserSearchResult } from "../types/user";
-import { useUsers } from "../context/UserContext";
+import React, { useState } from "react";
+import { useChat } from "../context/ChatContext";
 
 interface AddParticipantsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddParticipants: (userIds: number[]) => void;
-  existingParticipants: number[];
   chatId?: number;
 }
 
 export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
   isOpen,
   onClose,
-  onAddParticipants,
-  existingParticipants,
   chatId,
 }) => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<UserSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const { searchUsers, allUsers } = useUsers();
+  const [usernameInput, setUsernameInput] = useState("");
+  const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { addParticipantsToChat } = useChat();
 
-  useEffect(() => {
-    const performSearch = async () => {
-      if (!isOpen) return;
-
-      setIsSearching(true);
-      try {
-        const results = await searchUsers(searchQuery);
-
-        // Фильтруем уже выбранных пользователей и существующих участников
-        const filteredResults = results.filter(
-          (user) =>
-            !selectedUsers.some((selected) => selected.id === user.id) &&
-            !existingParticipants.includes(user.id)
-        );
-
-        setSearchResults(filteredResults);
-      } catch (error) {
-        console.error("Ошибка поиска пользователей:", error);
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    const timeoutId = setTimeout(performSearch, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, selectedUsers, existingParticipants, isOpen, searchUsers]);
-
-  const handleAddUser = (user: UserSearchResult) => {
-    setSelectedUsers((prev) => [...prev, user]);
-    setSearchQuery("");
-    setSearchResults([]);
+  const handleAddUsername = () => {
+    const trimmedUsername = usernameInput.trim();
+    if (trimmedUsername && !selectedUsernames.includes(trimmedUsername)) {
+      setSelectedUsernames((prev) => [...prev, trimmedUsername]);
+      setUsernameInput("");
+      setError("");
+    }
   };
 
-  const handleRemoveUser = (userId: number) => {
-    setSelectedUsers((prev) => prev.filter((user) => user.id !== userId));
+  const handleRemoveUsername = (username: string) => {
+    setSelectedUsernames((prev) => prev.filter((u) => u !== username));
   };
 
-  const handleSubmit = () => {
-    const userIds = selectedUsers.map((user) => user.id);
-    onAddParticipants(userIds);
-    setSelectedUsers([]);
-    setSearchQuery("");
-    setSearchResults([]);
-    onClose();
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddUsername();
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!chatId || selectedUsernames.length === 0) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      await addParticipantsToChat(chatId, selectedUsernames);
+      resetForm();
+      onClose();
+    } catch (error) {
+      console.error("Ошибка добавления участников:", error);
+      setError("Ошибка при добавлении участников. Проверьте никнеймы.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setUsernameInput("");
+    setSelectedUsernames([]);
+    setError("");
   };
 
   const handleClose = () => {
-    setSelectedUsers([]);
-    setSearchQuery("");
-    setSearchResults([]);
+    resetForm();
     onClose();
   };
 
@@ -83,103 +73,78 @@ export const AddParticipantsModal: React.FC<AddParticipantsModalProps> = ({
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
-        <h3 style={styles.title}>
-          {chatId ? "Добавить участников" : "Выберите участников"}
-        </h3>
+        <h3 style={styles.title}>Добавить участников в чат</h3>
 
-        {/* Выбранные пользователи */}
-        {selectedUsers.length > 0 && (
-          <div style={styles.selectedUsers}>
-            <h4 style={styles.subtitle}>Выбранные пользователи:</h4>
-            {selectedUsers.map((user) => (
-              <div key={user.id} style={styles.selectedUser}>
-                <span>
-                  {user.username} ({user.email})
-                </span>
+        {error && <div style={styles.error}>{error}</div>}
+
+        <div style={styles.inputSection}>
+          <label style={styles.label}>Добавить участника по никнейму:</label>
+          <div style={styles.usernameInputContainer}>
+            <input
+              type="text"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Введите никнейм пользователя..."
+              style={styles.usernameInput}
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              onClick={handleAddUsername}
+              disabled={!usernameInput.trim() || isLoading}
+              style={styles.addUsernameButton}
+            >
+              Добавить
+            </button>
+          </div>
+
+          <div style={styles.usernameHint}>
+            Введите никнейм пользователя и нажмите "Добавить"
+          </div>
+        </div>
+
+        {selectedUsernames.length > 0 && (
+          <div style={styles.selectedUsernames}>
+            <h4 style={styles.subtitle}>Выбранные участники:</h4>
+            {selectedUsernames.map((username) => (
+              <div key={username} style={styles.selectedUsername}>
+                <span>@{username}</span>
                 <button
                   type="button"
-                  onClick={() => handleRemoveUser(user.id)}
+                  onClick={() => handleRemoveUsername(username)}
                   style={styles.removeButton}
+                  disabled={isLoading}
                 >
                   ×
                 </button>
               </div>
             ))}
+            <div style={styles.usernamesCount}>
+              Всего участников для добавления: {selectedUsernames.length}
+            </div>
           </div>
         )}
-
-        {/* Поиск пользователей */}
-        <div style={styles.searchSection}>
-          <label style={styles.label}>Поиск пользователей:</label>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Введите имя пользователя или email..."
-            style={styles.searchInput}
-          />
-
-          {/* Результаты поиска */}
-          {isSearching && <div style={styles.loading}>Поиск...</div>}
-
-          {searchResults.length > 0 && (
-            <div style={styles.searchResults}>
-              {searchResults.map((user) => (
-                <div
-                  key={user.id}
-                  style={styles.searchResult}
-                  onClick={() => handleAddUser(user)}
-                >
-                  <div style={styles.userInfo}>
-                    <strong>{user.username}</strong>
-                    <span style={styles.userEmail}>{user.email}</span>
-                  </div>
-                  <button type="button" style={styles.addButton}>
-                    +
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {searchQuery && !isSearching && searchResults.length === 0 && (
-            <div style={styles.noResults}>
-              {allUsers.length === 0
-                ? "Не удалось загрузить пользователей"
-                : "Пользователи не найдены"}
-            </div>
-          )}
-
-          {!searchQuery && !isSearching && (
-            <div style={styles.hint}>
-              Начните вводить имя или email для поиска
-              {allUsers.length > 0 && (
-                <div style={styles.usersCount}>
-                  Всего пользователей в системе: {allUsers.length}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         <div style={styles.buttons}>
           <button
             type="button"
             onClick={handleClose}
             style={styles.cancelButton}
+            disabled={isLoading}
           >
             Отмена
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={selectedUsers.length === 0}
+            disabled={selectedUsernames.length === 0 || isLoading}
             style={{
               ...styles.submitButton,
-              opacity: selectedUsers.length === 0 ? 0.5 : 1,
+              opacity: selectedUsernames.length === 0 ? 0.5 : 1,
             }}
           >
-            {chatId ? "Добавить" : "Продолжить"}
+            {isLoading ? "Добавление..." : "Добавить участников"}
           </button>
         </div>
       </div>
@@ -217,19 +182,65 @@ const styles = {
     fontSize: "20px",
     fontWeight: "600" as const,
   },
+  error: {
+    backgroundColor: "#ffebee",
+    color: "#c62828",
+    padding: "12px",
+    borderRadius: "6px",
+    marginBottom: "20px",
+    fontSize: "14px",
+  },
+  inputSection: {
+    marginBottom: "20px",
+  },
+  label: {
+    display: "block",
+    marginBottom: "8px",
+    color: "#2c2c2c",
+    fontWeight: "600" as const,
+    fontSize: "14px",
+  },
+  usernameInputContainer: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "10px",
+  },
+  usernameInput: {
+    flex: 1,
+    padding: "12px",
+    border: "1px solid #e0e0e0",
+    borderRadius: "6px",
+    fontSize: "14px",
+    outline: "none",
+  },
+  addUsernameButton: {
+    padding: "12px 20px",
+    border: "none",
+    borderRadius: "6px",
+    backgroundColor: "#800020",
+    color: "white",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "600" as const,
+  },
+  usernameHint: {
+    fontSize: "12px",
+    color: "#666",
+    fontStyle: "italic" as const,
+  },
+  selectedUsernames: {
+    marginBottom: "20px",
+    padding: "15px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "8px",
+  },
   subtitle: {
     marginBottom: "10px",
     color: "#2c2c2c",
     fontSize: "16px",
     fontWeight: "600" as const,
   },
-  selectedUsers: {
-    marginBottom: "20px",
-    padding: "15px",
-    backgroundColor: "#f8f9fa",
-    borderRadius: "8px",
-  },
-  selectedUser: {
+  selectedUsername: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -248,79 +259,11 @@ const styles = {
     fontWeight: "bold" as const,
     padding: "0 8px",
   },
-  searchSection: {
-    marginBottom: "20px",
-  },
-  label: {
-    display: "block",
-    marginBottom: "8px",
-    color: "#2c2c2c",
-    fontWeight: "600" as const,
-    fontSize: "14px",
-  },
-  searchInput: {
-    width: "100%",
-    padding: "12px",
-    border: "1px solid #e0e0e0",
-    borderRadius: "6px",
-    fontSize: "14px",
-    outline: "none",
-    marginBottom: "10px",
-  },
-  searchResults: {
-    border: "1px solid #e0e0e0",
-    borderRadius: "6px",
-    maxHeight: "200px",
-    overflowY: "auto" as const,
-  },
-  searchResult: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "12px",
-    borderBottom: "1px solid #f0f0f0",
-    cursor: "pointer",
-    transition: "background-color 0.2s ease",
-  },
-  userInfo: {
-    display: "flex",
-    flexDirection: "column" as const,
-  },
-  userEmail: {
+  usernamesCount: {
     fontSize: "12px",
     color: "#666",
-    marginTop: "2px",
-  },
-  addButton: {
-    background: "none",
-    border: "none",
-    color: "#800020",
-    cursor: "pointer",
-    fontSize: "18px",
-    fontWeight: "bold" as const,
-    padding: "0 8px",
-  },
-  loading: {
-    padding: "12px",
+    marginTop: "10px",
     textAlign: "center" as const,
-    color: "#666",
-    fontStyle: "italic" as const,
-  },
-  noResults: {
-    padding: "12px",
-    textAlign: "center" as const,
-    color: "#666",
-  },
-  hint: {
-    padding: "12px",
-    textAlign: "center" as const,
-    color: "#666",
-    fontStyle: "italic" as const,
-  },
-  usersCount: {
-    fontSize: "12px",
-    marginTop: "5px",
-    color: "#999",
   },
   buttons: {
     display: "flex",
@@ -348,24 +291,5 @@ const styles = {
     fontWeight: "600" as const,
   },
 };
-
-// Добавляем hover эффекты
-const hoverStyles = `
-  .search-result:hover {
-    background-color: #f5f5f5 !important;
-  }
-  
-  .add-button:hover {
-    background-color: #800020 !important;
-    color: white !important;
-    border-radius: 50% !important;
-  }
-`;
-
-if (typeof document !== "undefined") {
-  const style = document.createElement("style");
-  style.textContent = hoverStyles;
-  document.head.appendChild(style);
-}
 
 export default AddParticipantsModal;

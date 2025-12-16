@@ -113,19 +113,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const response = await authAPI.login(data);
 
-      console.log("Успешный вход:", response.user);
-      console.log("Получен токен:", response.token ? "да" : "нет");
+      console.log("✅ Успешный вход:", response.user);
+      console.log("✅ Токен получен:", response.token ? "да" : "нет");
+      console.log(
+        "✅ Токен (первые 30 символов):",
+        response.token?.substring(0, 30) + "..."
+      );
 
       setUser(response.user);
 
-      // Сохраняем в sessionStorage
+      // ⚠️ ВАЖНО: Проверьте, что token не undefined
+      if (!response.token) {
+        console.error("❌ ОШИБКА: Токен не получен от сервера!");
+        throw new Error("Токен не получен от сервера");
+      }
+
+      // Токен уже должен быть сохранен в authAPI.login, но на всякий случай дублируем
+      console.log("💾 Сохраняю токен в sessionStorage...");
       sessionStorage.setItem("auth_token", response.token);
+
+      // Немедленно проверяем
+      const savedToken = sessionStorage.getItem("auth_token");
+      console.log(
+        "✅ Проверка сохранения:",
+        savedToken ? "успешно" : "НЕ УДАЛОСЬ"
+      );
+      console.log(
+        "✅ Сохраненный токен:",
+        savedToken?.substring(0, 30) + "..."
+      );
+
       sessionStorage.setItem("user_data", JSON.stringify(response.user));
-      // Устанавливаем флаг, что сессия инициализирована
       sessionStorage.setItem("auth_initialized", "true");
 
-      console.log("Данные сохранены в sessionStorage");
-      console.log("Текущий пользователь в состоянии:", response.user);
+      console.log("✅ Все данные сохранены в sessionStorage");
     } catch (error) {
       console.error("Ошибка входа:", error);
       console.error("Тип ошибки:", typeof error);

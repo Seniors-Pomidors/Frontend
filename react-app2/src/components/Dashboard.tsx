@@ -7,29 +7,21 @@ import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { CreateChatModal } from "./CreateChatModal";
 import { AddParticipantsModal } from "./AddParticipantsModal";
-import { chatAPI } from "../services/api";
 
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { chats, currentChat, messages, selectChat, error, clearError } =
-    useChat();
+  const {
+    chats,
+    currentChat,
+    messages,
+    selectChat,
+    error,
+    clearError,
+    deleteChat,
+  } = useChat();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showAddParticipantsModal, setShowAddParticipantsModal] =
     useState(false);
-
-  const handleAddParticipantsToChat = async (userIds: number[]) => {
-    if (!currentChat) return;
-
-    try {
-      for (const userId of userIds) {
-        await chatAPI.addParticipant(currentChat.id, userId);
-      }
-      const updatedChat = await chatAPI.getChat(currentChat.id);
-      selectChat(updatedChat);
-    } catch (error) {
-      console.error("Ошибка добавления участников:", error);
-    }
-  };
 
   return (
     <div style={styles.container}>
@@ -107,7 +99,26 @@ export const Dashboard: React.FC = () => {
                         className="chat-action-button"
                         title="Добавить участников"
                       >
-                        👥 Добавить участников
+                        👥 Добавить
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(`Удалить чат "${currentChat.name}"?`)
+                          ) {
+                            deleteChat(currentChat.id);
+                          }
+                        }}
+                        style={{
+                          ...styles.actionButton,
+                          backgroundColor: "#dc3545",
+                          color: "white",
+                          border: "none",
+                        }}
+                        className="chat-action-button"
+                        title="Удалить чат"
+                      >
+                        🗑️ Удалить
                       </button>
                     </div>
                   </div>
@@ -141,8 +152,6 @@ export const Dashboard: React.FC = () => {
       <AddParticipantsModal
         isOpen={showAddParticipantsModal}
         onClose={() => setShowAddParticipantsModal(false)}
-        onAddParticipants={handleAddParticipantsToChat}
-        existingParticipants={currentChat?.participants?.map((p) => p.id) || []}
         chatId={currentChat?.id}
       />
     </div>
@@ -186,7 +195,6 @@ const styles = {
     cursor: "pointer",
     fontSize: "14px",
     fontWeight: "600" as const,
-    transition: "background-color 0.3s ease",
   },
   error: {
     backgroundColor: "#c44569",
@@ -255,8 +263,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "background-color 0.3s ease, transform 0.2s ease",
-    fontWeight: "bold" as const,
   },
   chatArea: {
     flex: 1,
@@ -318,7 +324,6 @@ const styles = {
     cursor: "pointer",
     fontSize: "14px",
     fontWeight: "600" as const,
-    transition: "background-color 0.3s ease, color 0.3s ease",
   },
   messagesContainer: {
     flex: 1,
@@ -363,6 +368,10 @@ const hoverStyles = `
   .chat-action-button:hover {
     background-color: #800020 !important;
     color: white !important;
+  }
+  
+  .chat-action-button[style*="background-color: #dc3545"]:hover {
+    background-color: #c82333 !important;
   }
 `;
 
